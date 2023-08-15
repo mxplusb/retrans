@@ -15,10 +15,10 @@ workflows:
 #        APP_ID: 6444530615
 #        BUNDLE_ID: "io.codemagic.maui.weather"
     scripts:
-      - name: &install-dotnet Install .NET
+      - name: Install .NET
         script: |
           chmod +x dotnet-install.sh
-          ./dotnet-install.sh --install-dir $DOTNET_PATH
+          ./dotnet-install.sh --install-dir $DOTNET_PATH --channel 7.0
       - name: install-maui
         script: |
           $DOTNET_BIN nuget locals all --clear 
@@ -67,7 +67,10 @@ workflows:
         DOTNET_PATH: $CM_BUILD_DIR/dotnet
         DOTNET_BIN: $CM_BUILD_DIR/dotnet/dotnet
     scripts:
-      - *install-dotnet
+      - name: Install .NET
+        script: |
+          chmod +x dotnet-install.sh
+          ./dotnet-install.sh --install-dir $DOTNET_PATH --channel 7.0
       - name: Install MAUI
         script: |
           $DOTNET_BIN nuget locals all --clear 
