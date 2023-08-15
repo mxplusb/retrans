@@ -47,6 +47,8 @@ workflows:
              UPDATED_BUILD_NUMBER=$(($LATEST_BUILD_NUMBER + 1))
           fi
           
+          buildNum="$(date +%Y.%m).${UPDATED_BUILD_NUMBER}"
+          
           CERT_NAME=$(keychain list-certificates | jq -r '.[] | .common_name')
           PROFILE_NAME=$(find ~/Library/MobileDevice/Provisioning\ Profiles -name "*.mobileprovision" -execdir sh -c '/usr/libexec/PlistBuddy -c "print :Name" /dev/stdin <<< $(security cms -D -i {})' \;)
           
@@ -69,10 +71,10 @@ workflows:
     max_build_duration: 120
     instance_type: mac_mini_m1
     environment:
-#      android_signing:
-#        - codemagic_keystore
-#      groups:
-#        - google_play
+      android_signing:
+        - Demo Key
+      groups:
+        - google_credentials
       vars:
         <<: *vars
         DOTNET_WORKLOAD: "android maui wasm-tools"
@@ -87,7 +89,9 @@ workflows:
           else
               UPDATED_BUILD_NUMBER=$(($LATEST_BUILD_NUMBER + 1))
           fi
-          cd src
+          
+          buildNum="$(date +%Y.%m).${UPDATED_BUILD_NUMBER}"
+          
           $DOTNET_BIN publish -f net7.0-android \
             -c Release \
             -p:AndroidKeyStore=True \
@@ -95,13 +99,13 @@ workflows:
             -p:AndroidSigningKeyAlias=$CM_KEY_ALIAS \
             -p:AndroidSigningKeyPass=$CM_KEY_PASSWORD \
             -p:AndroidSigningStorePass=$CM_KEYSTORE_PASSWORD \
-            -p:ApplicationVersion=$UPDATED_BUILD_NUMBER \
-            -p:ApplicationDisplayVersion="1.0.0" \
+            -p:ApplicationVersion="${buildNum}" \
+            -p:ApplicationDisplayVersion="${buildNum}" \
             -o ../artifacts
     artifacts:
       - /Users/builder/clone/artifacts/*Signed.aab
-#    publishing:
-#      google_play:
-#        credentials: $GCLOUD_SERVICE_ACCOUNT_CREDENTIALS
-#        track: internal
-#        submit_as_draft: true
+    publishing:
+      google_play:
+        credentials: $GCLOUD_SERVICE_ACCOUNT_CREDENTIALS
+        track: internal
+        submit_as_draft: true
