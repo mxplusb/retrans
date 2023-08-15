@@ -1,18 +1,57 @@
+envs: &vars
+  DOTNET_PATH: $CM_BUILD_DIR/dotnet
+  DOTNET_BIN: $CM_BUILD_DIR/dotnet/dotnet
+  BUNDLE_ID: "io.r3t.retrans"
+
 install-dotnet: &install-dotnet
   name: install-dotnet
   script: |
     wget https://dot.net/v1/dotnet-install.sh
     chmod +x dotnet-install.sh
-    ./dotnet-install.sh --install-dir $DOTNET_PATH --channel 7.0
+    ./dotnet-install.sh --install-dir $DOTNET_PATH --channel 7.0.1xx --quality GA
+
 install-maui: &install-maui
   name: install-maui
   script: |
     $DOTNET_BIN nuget locals all --clear
     $DOTNET_BIN workload install $DOTNET_WORKLOAD
-envs: &vars
-  DOTNET_PATH: $CM_BUILD_DIR/dotnet
-  DOTNET_BIN: $CM_BUILD_DIR/dotnet/dotnet
-  BUNDLE_ID: "io.r3t.retrans"
+
+dotnet-restore: &dotnet-restore
+  name: dotnet-restore
+  script: |
+    $DOTNET_BIN restore
+    
+prebuild-script: &prebuild
+  name: generate-credentials
+  script: |
+    ./prebuild.sh
+
+dotnet-build: &dotnet-build
+  name: dotnet-build
+  script: |
+    $DOTNET_BIN build --no-restore -f $TARGET_FRAMEWORK
+
+build-number: &build-number
+  name: generate-build-number
+  script: |
+    LATEST_BUILD_NUMBER=$($STORE_COMMAND)
+    if [ -z $LATEST_BUILD_NUMBER ]; then
+        UPDATED_BUILD_NUMBER=$BUILD_NUMBER
+    else
+        UPDATED_BUILD_NUMBER=$(($LATEST_BUILD_NUMBER + 1))
+    fi
+    buildNum="$(date +%Y.%m).${UPDATED_BUILD_NUMBER}"
+    echo "BUILD_NUMBER=$buildNum" >> $CM_ENV
+
+pull-request: &pull-request
+  triggering:
+    events:
+      - pull_request
+    branch_patterns:
+      - pattern: 'mainline'
+        include: true
+        source: false
+
 
 workflows:
   maui-ios:
@@ -68,39 +107,37 @@ workflows:
 #        auth: integration
   maui-android:
     name: Android
+#    <<: *pull-request
     max_build_duration: 120
     instance_type: mac_mini_m1
     environment:
       android_signing:
         - Demo Key
       groups:
+        - azure
         - google_credentials
       vars:
         <<: *vars
-        DOTNET_WORKLOAD: "android maui wasm-tools"
+        DOTNET_WORKLOAD: "maui"
+        TARGET_FRAMEWORK: "net7.0-android"
+        STORE_COMMAND: 'google-play get-latest-build-number --package-name "$PACKAGE_NAME"'
     scripts:
       - *install-dotnet
-      - *install-maui      
-      - name: Build
+      - *install-maui
+      - *dotnet-restore
+      - *dotnet-build
+      - *build-number
+      - name: build
         script: |
-          LATEST_BUILD_NUMBER=$(google-play get-latest-build-number --package-name "$PACKAGE_NAME")
-          if [ -z $LATEST_BUILD_NUMBER ]; then
-              UPDATED_BUILD_NUMBER=$BUILD_NUMBER
-          else
-              UPDATED_BUILD_NUMBER=$(($LATEST_BUILD_NUMBER + 1))
-          fi
-          
-          buildNum="$(date +%Y.%m).${UPDATED_BUILD_NUMBER}"
-          
-          $DOTNET_BIN publish -f net7.0-android \
+          $DOTNET_BIN publish --no-restore -f $TARGET_FRAMEWORK \
             -c Release \
             -p:AndroidKeyStore=True \
             -p:AndroidSigningKeyStore=$CM_KEYSTORE_PATH \
             -p:AndroidSigningKeyAlias=$CM_KEY_ALIAS \
             -p:AndroidSigningKeyPass=$CM_KEY_PASSWORD \
             -p:AndroidSigningStorePass=$CM_KEYSTORE_PASSWORD \
-            -p:ApplicationVersion="${buildNum}" \
-            -p:ApplicationDisplayVersion="${buildNum}" \
+            -p:ApplicationVersion="${BUILD_NUMBER}" \
+            -p:ApplicationDisplayVersion="${BUILD_NUMBER}" \
             -o ../artifacts
     artifacts:
       - /Users/builder/clone/artifacts/*Signed.aab
