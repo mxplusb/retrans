@@ -30,9 +30,9 @@
         <SupportedOSPlatformVersion Condition="$([MSBuild]::GetTargetPlatformIdentifier('$(TargetFramework)')) == 'tizen'">6.5</SupportedOSPlatformVersion>
     </PropertyGroup>
 
-    <!--    <Target Name="PreBuild" BeforeTargets="Build">-->
-    <!--        <Exec Command="./prebuild.sh" EnvironmentVariables="SPEECH_KEY=$(SPEECH_KEY)" />-->
-    <!--    </Target>-->
+        <Target Name="PreBuild" BeforeTargets="Build">
+            <Exec Command="./prebuild.sh" EnvironmentVariables="SPEECH_KEY=$(SPEECH_KEY)" />
+        </Target>
 
     <ItemGroup>
         <!-- App Icon -->
