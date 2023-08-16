@@ -6,9 +6,10 @@ for file in src/consts.cs; do
 namespace retrans; 
 
 public static class Global {
-    public const string SpeechKey = "${SPEECH_KEY}";
     public const string AzureClientId = "${AZURE_CLIENT_ID}";
     public const string AzureClientSecret = "${AZURE_CLIENT_SECRET}";
+    public const string BuildNumber = "${BUILD_NUMBER}";
+    public const string SpeechKey = "${SPEECH_KEY}";
 }
 EOF
 done

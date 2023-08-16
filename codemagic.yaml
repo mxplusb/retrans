@@ -20,7 +20,8 @@ dotnet-restore: &dotnet-restore
   name: dotnet-restore
   script: |
     $DOTNET_BIN restore
-    
+
+# build info generator, must come after build-number
 prebuild-script: &prebuild
   name: generate-credentials
   script: |
@@ -128,6 +129,7 @@ workflows:
       - *dotnet-restore
       - *dotnet-build
       - *build-number
+      - *prebuild
       - name: build
         script: |
           $DOTNET_BIN publish --no-restore -f $TARGET_FRAMEWORK \
