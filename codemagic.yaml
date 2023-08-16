@@ -2,6 +2,11 @@ envs: &vars
   DOTNET_PATH: $CM_BUILD_DIR/dotnet
   DOTNET_BIN: $CM_BUILD_DIR/dotnet/dotnet
   BUNDLE_ID: "io.r3t.retrans"
+  
+install-git-lfs: &install-git-lfs
+    name: install-git-lfs
+    script: |
+      git lfs install --skip-smudge
 
 install-dotnet: &install-dotnet
   name: install-dotnet
@@ -124,13 +129,14 @@ workflows:
         TARGET_FRAMEWORK: "net7.0-android"
         STORE_COMMAND: 'google-play get-latest-build-number --package-name "$PACKAGE_NAME"'
     scripts:
+      - *install-git-lfs
       - *install-dotnet
       - *install-maui
       - *dotnet-restore
-      - *dotnet-build
       - *build-number
       - *prebuild
-      - name: build
+      - *dotnet-build
+      - name: dotnet-package
         script: |
           $DOTNET_BIN publish --no-restore -f $TARGET_FRAMEWORK \
             -c Release \
