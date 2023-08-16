@@ -1,4 +1,5 @@
 envs: &vars
+  DOTNET_WORKLOAD: "maui"
   DOTNET_PATH: $CM_BUILD_DIR/dotnet
   DOTNET_BIN: $CM_BUILD_DIR/dotnet/dotnet
   BUNDLE_ID: "io.r3t.retrans"
@@ -14,19 +15,15 @@ env-android: &android-env
   <<: *env-groups
   vars:
     <<: *vars
-    DOTNET_WORKLOAD: "maui"
     TARGET_FRAMEWORK: "net7.0-android"
     IS_ANDROID: "1"
 
 env-ios: &ios-env
-  environment:
-    android_signing:
-      - Demo Key
-    <<: *env-groups
-    vars:
-      <<: *vars
-      TARGET_FRAMEWORK: "net7.0-ios"
-      IS_IOS: "1"
+  <<: *env-groups
+  vars:
+    <<: *vars
+    TARGET_FRAMEWORK: "net7.0-ios"
+    IS_IOS: "1"
 
 install-git-lfs: &install-git-lfs
   name: install-git-lfs
@@ -101,7 +98,7 @@ package-ios: &ios-package
     CERT_NAME=$(keychain list-certificates | jq -r '.[] | .common_name')
     PROFILE_NAME=$(find ~/Library/MobileDevice/Provisioning\ Profiles -name "*.mobileprovision" -execdir sh -c '/usr/libexec/PlistBuddy -c "print :Name" /dev/stdin <<< $(security cms -D -i {})' \;)
 
-    $DOTNET_BIN publish -f net7.0-ios \
+    $DOTNET_BIN publish src/retrans.csproj -f net7.0-ios \
       -c Release \
       -p:BuildIpa=True \
       -p:ApplicationDisplayVersion="1.0.0" \
@@ -139,9 +136,7 @@ workflows:
     instance_type: mac_mini_m1
     <<: *pull-request
     environment:
-      <<: *env-groups
-      vars:
-        <<: *vars
+      <<: *ios-env
     scripts:
       - *install-git-lfs
       - *install-dotnet
@@ -149,6 +144,7 @@ workflows:
       - *build-number
       - *prebuild
       - *dotnet-restore
+      - *set-plist-values
       - *ios-package
     artifacts:
       - ./artifacts/*.ipa
