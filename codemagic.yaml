@@ -139,7 +139,7 @@ workflows:
       - *dotnet-build
       - name: dotnet-package
         script: |
-          $DOTNET_BIN publish --no-restore -f $TARGET_FRAMEWORK \
+          $DOTNET_BIN publish src/retrans.csproj --no-restore -f $TARGET_FRAMEWORK \
             -c Release \
             -p:AndroidKeyStore=True \
             -p:AndroidSigningKeyStore=$CM_KEYSTORE_PATH \
@@ -148,7 +148,7 @@ workflows:
             -p:AndroidSigningStorePass=$CM_KEYSTORE_PASSWORD \
             -p:ApplicationVersion="${BUILD_NUMBER}" \
             -p:ApplicationDisplayVersion="${VERSION}" \
-            -o ../artifacts
+            -o /Users/builder/clone/artifacts
     artifacts:
       - /Users/builder/clone/artifacts/*Signed.aab
     publishing:
