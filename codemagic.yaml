@@ -47,8 +47,9 @@ build-number: &build-number
     else
         UPDATED_BUILD_NUMBER=$(($LATEST_BUILD_NUMBER + 1))
     fi
-    buildNum="$(date +%Y.%m).${UPDATED_BUILD_NUMBER}"
-    echo "BUILD_NUMBER=$buildNum" >> $CM_ENV
+    buildNum="$(date +%Y.%m.%d)"
+    echo "BUILD_NUMBER=$UPDATED_BUILD_NUMBER" >> $CM_ENV
+    echo "VERSION=$(date +%Y.%m.%d)" >> $CM_ENV
 
 pull-request: &pull-request
   triggering:
@@ -132,9 +133,9 @@ workflows:
       - *install-git-lfs
       - *install-dotnet
       - *install-maui
-      - *dotnet-restore
       - *build-number
       - *prebuild
+      - *dotnet-restore
       - *dotnet-build
       - name: dotnet-package
         script: |
@@ -146,7 +147,7 @@ workflows:
             -p:AndroidSigningKeyPass=$CM_KEY_PASSWORD \
             -p:AndroidSigningStorePass=$CM_KEYSTORE_PASSWORD \
             -p:ApplicationVersion="${BUILD_NUMBER}" \
-            -p:ApplicationDisplayVersion="${BUILD_NUMBER}" \
+            -p:ApplicationDisplayVersion="${VERSION}" \
             -o ../artifacts
     artifacts:
       - /Users/builder/clone/artifacts/*Signed.aab
