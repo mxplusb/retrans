@@ -26,7 +26,7 @@ using retrans.ViewModels;
 namespace retrans.Pages;
 
 [SuppressMessage("ReSharper", "RedundantLambdaParameterType")]
-public class SpeakPage : BaseContentPage<SpeakViewModel> {
+public partial class SpeakPage : BaseContentPage<SpeakViewModel> {
     public SpeakPage(SpeakViewModel viewModel) : base(viewModel) {
         var tooltipIcon = new Label {
             Text = MaterialDesignIcons.InformationSymbol, FontSize = 20, FontFamily = "MaterialDesignIcons"

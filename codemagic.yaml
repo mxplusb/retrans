@@ -8,7 +8,7 @@ install-dotnet: &install-dotnet
   script: |
     wget https://dot.net/v1/dotnet-install.sh
     chmod +x dotnet-install.sh
-    ./dotnet-install.sh --install-dir $DOTNET_PATH --channel 7.0.1xx --quality GA
+    ./dotnet-install.sh --install-dir $DOTNET_PATH --channel 7.0 --quality GA
 
 install-maui: &install-maui
   name: install-maui
@@ -29,6 +29,7 @@ prebuild-script: &prebuild
 dotnet-build: &dotnet-build
   name: dotnet-build
   script: |
+    cd src
     $DOTNET_BIN build --no-restore -f $TARGET_FRAMEWORK
 
 build-number: &build-number

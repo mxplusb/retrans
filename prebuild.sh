@@ -1,6 +1,8 @@
 #!/bin/bash
 
-cat << EOF > consts.cs
+# shellcheck disable=SC2043
+for file in src/consts.cs; do
+  cat << EOF > $file
 namespace retrans; 
 
 public static class Global {
@@ -9,3 +11,4 @@ public static class Global {
     public const string AzureClientSecret = "${AZURE_CLIENT_SECRET}";
 }
 EOF
+done
