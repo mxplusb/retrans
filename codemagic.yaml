@@ -2,11 +2,36 @@ envs: &vars
   DOTNET_PATH: $CM_BUILD_DIR/dotnet
   DOTNET_BIN: $CM_BUILD_DIR/dotnet/dotnet
   BUNDLE_ID: "io.r3t.retrans"
-  
+
+env-groups: &env-groups
+  groups:
+    - azure
+    - google_credentials
+
+env-android: &android-env
+  android_signing:
+    - Demo Key
+  <<: *env-groups
+  vars:
+    <<: *vars
+    DOTNET_WORKLOAD: "maui"
+    TARGET_FRAMEWORK: "net7.0-android"
+    IS_ANDROID: "1"
+
+env-ios: &ios-env
+  environment:
+    android_signing:
+      - Demo Key
+    <<: *env-groups
+    vars:
+      <<: *vars
+      TARGET_FRAMEWORK: "net7.0-ios"
+      IS_IOS: "1"
+
 install-git-lfs: &install-git-lfs
-    name: install-git-lfs
-    script: |
-      git lfs install --skip-smudge
+  name: install-git-lfs
+  script: |
+    git lfs install --skip-smudge
 
 install-dotnet: &install-dotnet
   name: install-dotnet
@@ -38,18 +63,64 @@ dotnet-build: &dotnet-build
     cd src
     $DOTNET_BIN build --no-restore -f $TARGET_FRAMEWORK
 
+publish-config-google: &google-publish-config
+  google_play:
+    credentials: $GCLOUD_SERVICE_ACCOUNT_CREDENTIALS
+    track: internal
+    submit_as_draft: true
+
 build-number: &build-number
   name: generate-build-number
   script: |
-    LATEST_BUILD_NUMBER=$($STORE_COMMAND)
-    if [ -z $LATEST_BUILD_NUMBER ]; then
-        UPDATED_BUILD_NUMBER=$BUILD_NUMBER
-    else
-        UPDATED_BUILD_NUMBER=$(($LATEST_BUILD_NUMBER + 1))
-    fi
-    buildNum="$(date +%Y.%m.%d)"
-    echo "BUILD_NUMBER=$UPDATED_BUILD_NUMBER" >> $CM_ENV
     echo "VERSION=$(date +%Y.%m.%d)" >> $CM_ENV
+
+android-package: &android-package
+  name: dotnet-package-android
+  script: |
+    $DOTNET_BIN publish src/retrans.csproj --no-restore -f $TARGET_FRAMEWORK \
+      -c Release \
+      -p:AndroidKeyStore=True \
+      -p:AndroidSigningKeyStore=$CM_KEYSTORE_PATH \
+      -p:AndroidSigningKeyAlias=$CM_KEY_ALIAS \
+      -p:AndroidSigningKeyPass=$CM_KEY_PASSWORD \
+      -p:AndroidSigningStorePass=$CM_KEYSTORE_PASSWORD \
+      -p:ApplicationVersion="${BUILD_NUMBER}" \
+      -p:ApplicationDisplayVersion="${VERSION}" \
+      -o /Users/builder/clone/artifacts
+
+set-plist-values: &set-plist-values
+  name: set-plist-values
+  script: |
+    PLIST=$CM_BUILD_DIR/Platforms/iOS/Info.plist
+    PLIST_BUDDY=/usr/libexec/PlistBuddy
+    $PLIST_BUDDY -c "Add :ITSAppUsesNonExemptEncryption bool false" $PLIST
+
+package-ios: &ios-package
+  name: dotnet-package-ios
+  script: |
+    CERT_NAME=$(keychain list-certificates | jq -r '.[] | .common_name')
+    PROFILE_NAME=$(find ~/Library/MobileDevice/Provisioning\ Profiles -name "*.mobileprovision" -execdir sh -c '/usr/libexec/PlistBuddy -c "print :Name" /dev/stdin <<< $(security cms -D -i {})' \;)
+
+    $DOTNET_BIN publish -f net7.0-ios \
+      -c Release \
+      -p:BuildIpa=True \
+      -p:ApplicationDisplayVersion="1.0.0" \
+      -p:ApplicationVersion=$UPDATED_BUILD_NUMBER \
+      -p:RuntimeIdentifier=ios-arm64 \
+      -p:CodesignKey="$CERT_NAME" \
+      -p:CodesignProvision="$PROFILE_NAME" \
+      -o /Users/builder/clone/artifacts
+
+artifacts-build: &build-artifacts
+  artifacts:
+    - /Users/builder/clone/artifacts/*Signed.aab
+    - /Users/builder/clone/artifacts/*.ipa
+
+when-not-code: &when-not-code
+  changeset:
+    excludes:
+      - "**/*.md"
+      - "**/*.txt"
 
 pull-request: &pull-request
   triggering:
@@ -66,69 +137,29 @@ workflows:
     name: iOS
     max_build_duration: 120
     instance_type: mac_mini_m1
-#    integrations:
-#      app_store_connect: api-access-codemagic
     environment:
-#      ios_signing:
-#        distribution_type: app_store
-#        bundle_identifier: io.codemagic.maui.weather
+      <<: *env-groups
       vars:
         <<: *vars
-        DOTNET_WORKLOAD: "ios maui"
-#        APP_ID: 6444530615
-#        BUNDLE_ID: "io.codemagic.maui.weather"
     scripts:
+      - *install-git-lfs
       - *install-dotnet
-      - *install-maui     
-      - name: Set Info.plist values
-        script: |
-          PLIST=$CM_BUILD_DIR/Platforms/iOS/Info.plist
-          PLIST_BUDDY=/usr/libexec/PlistBuddy
-          $PLIST_BUDDY -c "Add :ITSAppUsesNonExemptEncryption bool false" $PLIST
-      - name: Set build version and build the app
-        script: |
-          LATEST_BUILD_NUMBER=$(app-store-connect get-latest-testflight-build-number "$APP_ID")
-          if [ -z $LATEST_BUILD_NUMBER ]; then
-             UPDATED_BUILD_NUMBER=$BUILD_NUMBER
-          else
-             UPDATED_BUILD_NUMBER=$(($LATEST_BUILD_NUMBER + 1))
-          fi
-          
-          buildNum="$(date +%Y.%m).${UPDATED_BUILD_NUMBER}"
-          
-          CERT_NAME=$(keychain list-certificates | jq -r '.[] | .common_name')
-          PROFILE_NAME=$(find ~/Library/MobileDevice/Provisioning\ Profiles -name "*.mobileprovision" -execdir sh -c '/usr/libexec/PlistBuddy -c "print :Name" /dev/stdin <<< $(security cms -D -i {})' \;)
-          
-          $DOTNET_BIN publish -f net7.0-ios \
-            -c Release \
-            -p:BuildIpa=True \
-            -p:ApplicationDisplayVersion="1.0.0" \
-            -p:ApplicationVersion=$UPDATED_BUILD_NUMBER \
-            -p:RuntimeIdentifier=ios-arm64 \
-            -p:CodesignKey="$CERT_NAME" \
-            -p:CodesignProvision="$PROFILE_NAME" \
-            -o ../artifacts
+      - *install-maui
+      - *build-number
+      - *prebuild
+      - *dotnet-restore
+      - *ios-package
     artifacts:
       - ./artifacts/*.ipa
-#    publishing:
-#      app_store_connect:
-#        auth: integration
   maui-android:
     name: Android
-#    <<: *pull-request
+    <<: *pull-request
+    when:
+      <<: *when-not-code
     max_build_duration: 120
     instance_type: mac_mini_m1
     environment:
-      android_signing:
-        - Demo Key
-      groups:
-        - azure
-        - google_credentials
-      vars:
-        <<: *vars
-        DOTNET_WORKLOAD: "maui"
-        TARGET_FRAMEWORK: "net7.0-android"
-        STORE_COMMAND: 'google-play get-latest-build-number --package-name "$PACKAGE_NAME"'
+      <<: *android-env
     scripts:
       - *install-git-lfs
       - *install-dotnet
@@ -137,22 +168,30 @@ workflows:
       - *prebuild
       - *dotnet-restore
       - *dotnet-build
-      - name: dotnet-package
-        script: |
-          $DOTNET_BIN publish src/retrans.csproj --no-restore -f $TARGET_FRAMEWORK \
-            -c Release \
-            -p:AndroidKeyStore=True \
-            -p:AndroidSigningKeyStore=$CM_KEYSTORE_PATH \
-            -p:AndroidSigningKeyAlias=$CM_KEY_ALIAS \
-            -p:AndroidSigningKeyPass=$CM_KEY_PASSWORD \
-            -p:AndroidSigningStorePass=$CM_KEYSTORE_PASSWORD \
-            -p:ApplicationVersion="${BUILD_NUMBER}" \
-            -p:ApplicationDisplayVersion="${VERSION}" \
-            -o /Users/builder/clone/artifacts
-    artifacts:
-      - /Users/builder/clone/artifacts/*Signed.aab
+      - *android-package
+    <<: *build-artifacts
+  maui-publish:
+    name: Publish
+    max_build_duration: 120
+    instance_type: mac_mini_m1
+    triggering:
+      events:
+        - push
+      branch_patterns:
+        - pattern: 'mainline'
+          include: true
+          source: true
+    environment:
+      <<: *android-env
+    scripts:
+      - *install-git-lfs
+      - *install-dotnet
+      - *install-maui
+      - *build-number
+      - *prebuild
+      - *dotnet-restore
+      - *android-package
+      - *ios-package
+    <<: *build-artifacts
     publishing:
-      google_play:
-        credentials: $GCLOUD_SERVICE_ACCOUNT_CREDENTIALS
-        track: internal
-        submit_as_draft: true
+      <<: *google-publish-config
